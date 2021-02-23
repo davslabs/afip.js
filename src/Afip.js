@@ -65,13 +65,6 @@ function Afip(options = {}){
 	this.PRIVATEKEY;
 
 	/**
-	 * Afip resources folder
-	 *
-	 * @var string
-	 **/
-	this.RES_FOLDER;
-
-	/**
 	 * The CUIT to use
 	 *
 	 * @var int
@@ -88,17 +81,15 @@ function Afip(options = {}){
 	if (!options.hasOwnProperty('production')) {options['production'] = false;}
 	if (!options.hasOwnProperty('cert')) {options['cert'] = 'cert';}
 	if (!options.hasOwnProperty('key')) {options['key'] = 'key';}
-	if (!options.hasOwnProperty('res_folder')) {options['res_folder'] = __dirname+'/Afip_res/';}
 	if (!options.hasOwnProperty('ta_folder')) {options['ta_folder'] = __dirname+'/Afip_res/';}
 	if (options['production'] !== true) {options['production'] = false;}
 
 	this.options = options;
 
 	this.CUIT 		= options['CUIT'];
-	this.RES_FOLDER = options['res_folder'];
 	this.TA_FOLDER 	= options['ta_folder'];
-	this.CERT 		= path.resolve(this.RES_FOLDER, options['cert']);
-	this.PRIVATEKEY = path.resolve(this.RES_FOLDER, options['key']);
+	this.CERT 		= options['cert'];
+	this.PRIVATEKEY = options['key'];
 	this.WSAA_WSDL 	= path.resolve(__dirname, 'Afip_res/', 'wsaa.wsdl');
 
 	if (options['production']) {

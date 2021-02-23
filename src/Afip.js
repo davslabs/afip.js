@@ -179,19 +179,12 @@ Afip.prototype.CreateServiceTA = async function(service) {
 	</loginTicketRequest>`).trim();
 
 	// Get cert file content
-	const certPromise = new Promise((resolve, reject) => {
-		fs.readFile(this.CERT, { encoding:'utf8' }, (err, data) => err ? reject(err) : resolve(data));
-	});
+	const cert = this.CERT;
 		
 	// Get key file content
-	const keyPromise = new Promise((resolve, reject) => {
-		fs.readFile(this.PRIVATEKEY, { encoding:'utf8' }, (err, data) => err ? reject(err) : resolve(data));
-	});
+	const key  = this.PRIVATEKEY;
 
-	// Wait for cert and key content
-	const [cert, key] = await Promise.all([certPromise, keyPromise]);
-
-	// Sign Tokent request authorization XML
+	// Sign Token request authorization XML
 	const p7 = forge.pkcs7.createSignedData();
 	p7.content = forge.util.createBuffer(tra, "utf8");
 	p7.addCertificate(cert);

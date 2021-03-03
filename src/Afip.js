@@ -71,6 +71,12 @@ function Afip(options = {}){
 	 **/
 	this.CUIT;
 
+	this.TOKEN;
+
+	this.SIGN;
+
+	this.DUE_DATE;
+
 	// Create an Afip instance if it is not
 	if (!(this instanceof Afip)) {return new Afip(options)}
 
@@ -81,15 +87,19 @@ function Afip(options = {}){
 	if (!options.hasOwnProperty('production')) {options['production'] = false;}
 	if (!options.hasOwnProperty('cert')) {options['cert'] = 'cert';}
 	if (!options.hasOwnProperty('key')) {options['key'] = 'key';}
-	if (!options.hasOwnProperty('ta_folder')) {options['ta_folder'] = __dirname+'/Afip_res/';}
+	if (!options.hasOwnProperty('token')) {options['token'] = 'token';}
+	if (!options.hasOwnProperty('sign')) {options['sign'] = 'sign';}
+	if (!options.hasOwnProperty('dueDate')) {options['dueDate'] = 'dueDate';}
 	if (options['production'] !== true) {options['production'] = false;}
 
 	this.options = options;
 
 	this.CUIT 		= options['CUIT'];
-	this.TA_FOLDER 	= options['ta_folder'];
 	this.CERT 		= options['cert'];
 	this.PRIVATEKEY = options['key'];
+	this.TOKEN = options['token'];
+	this.SIGN = options['sign'];
+	this.DUE_DATE = options['dueDate'];
 	this.WSAA_WSDL 	= path.resolve(__dirname, 'Afip_res/', 'wsaa.wsdl');
 
 	if (options['production']) {
@@ -108,66 +118,52 @@ function Afip(options = {}){
 }
 
 /**
- * Gets token authorization for an AFIP Web Service
+ * Gets token access-tokens for an AFIP Web Service
  *
- * @param service Service for token authorization
+ * @param service Service for token access-tokens
  **/
 Afip.prototype.GetServiceTA = async function(service, firstTry = true) {
-	// Declare token authorization file path
-	const taFilePath = path.resolve(
-		this.TA_FOLDER,
-		`TA-${this.options['CUIT']}-${service}${this.options['production'] ? '-production' : ''}.json`
-	);
+	if(this.TOKEN && this.SIGN && this.DUE_DATE) {
+		const taData = {
+			token: this.TOKEN,
+			sign: this.SIGN,
+			dueDate: this.DUE_DATE,
+		}
 
-	// Check if token authorization file exists
-	const taFileAccessError = await new Promise((resolve) => {
-		fs.access(taFilePath, fs.constants.F_OK, resolve);
-	}); 
-
-	// If have access to token authorization file
-	if (!taFileAccessError) {
-		const taData = require(taFilePath);
 		const actualTime = new Date(Date.now() + 600000);
-		const expirationTime = new Date(taData.header[1].expirationtime);
-
-		// Delete TA cache
-		delete require.cache[require.resolve(taFilePath)];
+		const expirationTime = new Date(taData.dueDate);
 
 		if (actualTime < expirationTime) {
-			// Return token authorization
-			return {
-				token : taData.credentials.token,
-				sign : taData.credentials.sign
-			}
+			return taData;
 		}
 	}
-	
-	// Throw error if this is not the first try to get token authorization
-	if (firstTry === false){
+
+	// Throw error if this is not the first try to get token access-tokens
+	if (firstTry === false) {
 		throw new Error('Error getting Token Autorization');
 	}
 
-	// Create token authorization file
+	// Create token access-tokens file
 	await this.CreateServiceTA(service).catch(err => {
 		throw new Error(`Error getting Token Autorization ${err}`)
 	});
 
-	// Try to get token authorization one more time
+	// Try to get token access-tokens one more time
 	return await this.GetServiceTA(service, false);
 }
 
 /**
  * Create an TA from WSAA
  *
- * Request to WSAA for a tokent authorization for service 
+ * Request to WSAA for a tokent access-tokens for service
  * and save this in a json file
  *
- * @param service Service for token authorization
+ * @param service Service for token access-tokens
  **/
 Afip.prototype.CreateServiceTA = async function(service) {
 	const date = new Date();
 	
-	// Tokent request authorization XML
+	// Tokent request access-tokens XML
 	const tra = (`<?xml version="1.0" encoding="UTF-8" ?>
 	<loginTicketRequest version="1.0">
 		<header>
@@ -184,7 +180,7 @@ Afip.prototype.CreateServiceTA = async function(service) {
 	// Get key file content
 	const key  = this.PRIVATEKEY;
 
-	// Sign Token request authorization XML
+	// Sign Token request access-tokens XML
 	const p7 = forge.pkcs7.createSignedData();
 	p7.content = forge.util.createBuffer(tra, "utf8");
 	p7.addCertificate(cert);
@@ -221,19 +217,9 @@ Afip.prototype.CreateServiceTA = async function(service) {
 	const [ loginCmsResult ] = await soapClient.loginCmsAsync(loginArguments)
 
 	// Parse loginCmsReturn to JSON 
-	const res = await xmlParser.parseStringPromise(loginCmsResult.loginCmsReturn); 
+	const res = await xmlParser.parseStringPromise(loginCmsResult.loginCmsReturn);
 
-	// Declare token authorization file path
-	const taFilePath = path.resolve(
-		this.TA_FOLDER,
-		`TA-${this.options['CUIT']}-${service}${this.options['production'] ? '-production' : ''}.json`
-	);
-	
-	// Save Token authorization data to json file
-	await (new Promise((resolve, reject) => {
-		fs.writeFile(taFilePath, JSON.stringify(res.loginticketresponse), (err) => {
-			if (err) {reject(err);return;}
-			resolve();
-		});
-	}));
+	this.TOKEN = res.loginticketresponse.credentials.token;
+	this.SIGN = res.loginticketresponse.credentials.sign;
+	this.DUE_DATE = res.loginticketresponse.header[1].expirationtime;
 }
